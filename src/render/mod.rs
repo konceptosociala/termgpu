@@ -3,12 +3,40 @@ use bytemuck::Pod;
 use hal::{
     buffer::*, pipeline::*, resource::ShaderResource, texture::*
 };
+use serde::{Deserialize, Serialize};
 use vertex::Vertex;
 use nalgebra_glm as glm;
 
 pub mod error;
 pub mod hal;
 pub mod vertex;
+
+pub mod prelude {
+    pub use super::{
+        Renderer,
+        DrawContext,
+        ComputePass,
+        RenderPass,
+        DrawDescriptor,
+        ComputeDescriptor,
+        RenderSurface,
+        Canvas,
+        Drawable,
+        InstanceData,
+        TransformationType,
+        Transformation,
+    };
+    pub use super::types::*;
+    pub use super::vertex::*;
+    pub use super::hal::{
+        buffer::*,
+        pipeline::*,
+        resource::*,
+        texture::*,
+        shader::*,
+    };
+    pub use super::error::RenderError;
+}
 
 pub mod types {
     pub use wgpu::{
@@ -32,6 +60,8 @@ pub mod types {
 pub use include_wgsl_oil::include_wgsl_oil as include_wgsl_raw;
 pub use wgpu::include_spirv_raw;
 
+use crate::{fatal, utils::Size};
+
 pub struct Renderer {
     width: u32,
     height: u32,
@@ -43,14 +73,16 @@ pub struct Renderer {
 }
 
 impl Renderer {
-    pub fn new(width: u16, height: u16) -> anyhow::Result<Renderer> {
+    pub fn new(size: Size) -> anyhow::Result<Renderer> {
         let instance = Self::init_instance();
         let adapter = Self::init_adapter(instance);
         let (device, queue) = Self::init_device(&adapter)?;
 
+        let Size::Renderer(width, height) = size.to_renderer() else { unreachable!() };
+
         let mut renderer = Renderer {
-            width: width as u32,
-            height: height as u32,
+            width,
+            height,
             device,
             queue,
             vertex_buffers: vec![],
@@ -65,8 +97,10 @@ impl Renderer {
                 height: renderer.height,
                 filter: wgpu::FilterMode::Linear,
                 dimension: wgpu::TextureDimension::D2,
-                format: wgpu::TextureFormat::Rgba32Float,
-                usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+                format: wgpu::TextureFormat::Rgba8Unorm,
+                usage: wgpu::TextureUsages::RENDER_ATTACHMENT 
+                    | wgpu::TextureUsages::TEXTURE_BINDING
+                    | wgpu::TextureUsages::COPY_SRC,
                 depth: None,
                 mip_level_count: 1,
                 label: "Surface texture".to_string(),
@@ -108,10 +142,12 @@ impl Renderer {
     }
 
     pub fn resize(&mut self) {
-        self.resize_with(self.width, self.height);
+        self.resize_with(Size::Renderer(self.width, self.height));
     }
 
-    pub fn resize_with(&mut self, width: u32, height: u32) {
+    pub fn resize_with(&mut self, size: Size) {
+        let Size::Renderer(width, height) = size.to_renderer() else { unreachable!() };
+
         if width == 0 || height == 0 { return }
 
         self.width = width;
@@ -158,12 +194,8 @@ impl Renderer {
         Ok(())
     }
 
-    pub fn width(&self) -> u32 {
-        self.width
-    }
-
-    pub fn height(&self) -> u32 {
-        self.height
+    pub fn size(&self) -> Size {
+        Size::Renderer(self.width, self.height)
     }
 
     fn init_device(adapter: &wgpu::Adapter) -> Result<(wgpu::Device, wgpu::Queue), wgpu::RequestDeviceError> {
@@ -297,6 +329,38 @@ impl DrawContext {
         );
     }
 
+    pub fn copy_texture_to_buffer<T>(
+        &mut self,
+        from: &Texture,
+        to: &Buffer<T>,
+    ) {
+        let unpadded_bytes_per_row = from.descriptor().width * 4;
+        let align = wgpu::COPY_BYTES_PER_ROW_ALIGNMENT; // 256
+        let padded_bytes_per_row = unpadded_bytes_per_row.div_ceil(align) * align;
+
+        self.encoder.copy_texture_to_buffer(
+            wgpu::ImageCopyTexture {
+                aspect: wgpu::TextureAspect::All,
+                texture: from.texture(),
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+            },
+            wgpu::ImageCopyBuffer {
+                buffer: to.inner(),
+                layout: wgpu::ImageDataLayout {
+                    offset: 0,
+                    bytes_per_row: Some(padded_bytes_per_row),
+                    rows_per_image: None,
+                },
+            },
+            wgpu::Extent3d {
+                width: from.descriptor().width,
+                height: from.descriptor().height,
+                depth_or_array_layers: 1,
+            },
+        );
+    }
+
     pub fn apply(self, _canvas: Canvas<'_>, renderer: &Renderer) {        
         renderer.queue.submit(std::iter::once(self.encoder.finish()));
     }
@@ -318,7 +382,7 @@ impl<'a> ComputePass<'a> {
         if let Pipeline::Compute(p) = descriptor.pipeline {
             self.pass.set_pipeline(p);
         } else {
-            panic!("Cannot use render pipeline in compute() command");
+            fatal!("Cannot use render pipeline in compute() command");
         }
 
         for (i, binding) in descriptor.shader_resources.iter().enumerate() {
@@ -356,7 +420,7 @@ impl<'a> RenderPass<'a> {
         if let Pipeline::Render(p) = descriptor.pipeline {
             self.pass.set_pipeline(p);
         } else {
-            panic!("Cannot use compute pipeline in draw() command");
+            fatal!("Cannot use compute pipeline in draw() command");
         }
 
         for (i, binding) in descriptor.shader_resources.iter().enumerate() {
@@ -388,6 +452,12 @@ pub struct Canvas<'canvas> {
     texture: &'canvas Texture,
 }
 
+impl Canvas<'_> {
+    pub fn texture(&self) -> &Texture {
+        self.texture
+    }
+}
+
 impl RenderSurface for Canvas<'_> {
     fn view(&self) -> &wgpu::TextureView {
         self.texture.view()
@@ -414,7 +484,7 @@ impl<I: Pod> InstanceData for I {
     }
 }
 
-#[derive(Clone, Copy, Default, Debug, Hash, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Copy, Default, Debug, Hash, PartialEq)]
 pub enum TransformationType {
     #[default]
     FirstPerson,

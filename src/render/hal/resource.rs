@@ -1,6 +1,7 @@
 use bytemuck::Pod;
 
 use crate::render::Renderer;
+use crate::fatal;
 
 use super::{buffer::{Buffer, BufferResourceDescriptor}, texture::{Texture, TextureResourceDescriptor, TextureResourceUsage}};
 
@@ -66,7 +67,7 @@ impl<'a> ShaderResourceBuilder<'a> {
                             visibility: wgpu::ShaderStages::FRAGMENT | wgpu::ShaderStages::COMPUTE,
                             ty: wgpu::BindingType::Texture {
                                 sample_type: descriptor.sample_type.unwrap_or_else(|| {
-                                    panic!("Must specify sample type for texture with TextureResourceUsage::TEXTURE");
+                                    fatal!("Must specify sample type for texture with TextureResourceUsage::TEXTURE");
                                 }),
                                 view_dimension,
                                 multisampled: false,

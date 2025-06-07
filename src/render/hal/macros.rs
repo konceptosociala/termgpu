@@ -2,13 +2,13 @@
 macro_rules! include_wgsl {
     ($token:tt) => {
         {
-            #[$crate::renderer::include_wgsl_raw($token)]
+            #[$crate::render::include_wgsl_raw($token)]
             #[allow(non_snake_case)]
             mod shader {}
 
-            $crate::renderer::hal::pipeline::Shader::Wgsl($crate::renderer::types::ShaderModuleDescriptor {
+            $crate::render::hal::shader::Shader::Wgsl($crate::render::types::ShaderModuleDescriptor {
                 label: Some($token),
-                source: $crate::renderer::types::ShaderSource::Wgsl(shader::SOURCE.into()),
+                source: $crate::render::types::ShaderSource::Wgsl(shader::SOURCE.into()),
             })
         }
     };
@@ -17,7 +17,7 @@ macro_rules! include_wgsl {
 #[macro_export]
 macro_rules! include_spirv {
     ($token:expr) => {
-        $crate::renderer::hal::pipeline::Shader::SpirV($crate::renderer::include_spirv_raw!($token))
+        $crate::render::hal::pipeline::Shader::SpirV($crate::render::include_spirv_raw!($token))
     };
 }
 

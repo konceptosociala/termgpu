@@ -1,6 +1,7 @@
 use bitflags::bitflags;
 use derive_getters::Getters;
 
+use crate::fatal;
 use crate::render::{RenderSurface, Renderer};
 use crate::render::types::*;
 
@@ -63,7 +64,7 @@ pub struct Texture {
 impl RenderSurface for Texture {
     fn view(&self) -> &TextureView {
         if !self.descriptor.usage.contains(wgpu::TextureUsages::RENDER_ATTACHMENT) {
-            panic!("Texture, used as render surface, must have RENDER_ATTACHMENT usage");
+            fatal!("Texture, used as render surface, must have RENDER_ATTACHMENT usage");
         }
 
         &self.view

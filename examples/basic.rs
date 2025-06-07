@@ -1,45 +1,70 @@
-use termgpu::{event::Event, render::Renderer};
+use std::time::Duration;
+
+use termgpu::prelude::*;
 
 fn main() {
-    let app = TermApp::new();
+    let mut app = TermApp::new(Duration::from_millis(50));
 
-    let triangle = Triangle::default();
+    let mut triangle = Triangle::default();
+    triangle.update(app.renderer_mut());
+
     let mut transform = Transform::identity();
     let mut direction = -1.0;
-    let mut current_size = app.current_size();
+    let mut current_size = app.size();
+
+    let pipeline = Pipeline::new_render(app.renderer(), &RenderPipelineDescriptor {
+        shader: include_wgsl!("basic.wgsl"),
+        bindings: &[],
+        label: "Basic pipeline",
+        use_vertices: true,
+        surface_formats: &[TextureFormat::Rgba8Unorm]
+    });
 
     app.run(|event: Event| {
         match event {
-            Event::Resize(width, height) => {
-                current_size = (width, height);
+            Event::Resize(size) => {
+                current_size = size;
+
+                log::info!("Resized!");
             },
             Event::Input(input) => {
-                if input.key == KeyCode::Space && input.state == KeyState::Pressed {
-                    direction *= -1.0;
+                if input.kind == KeyEventKind::Press {
+                    match input.code {
+                        KeyCode::Esc => exit(),
+                        KeyCode::Char(' ') => {
+                            direction *= -1.0;
+                        },
+                        _ => {}
+                        
+                    }
                 }
             },
             Event::Update => {
-                transform.rotate(0.01 * direction);
+                transform.rotation *= glm::quat_angle_axis(
+                    0.05 * direction, 
+                    &glm::vec3(1.0, 1.0, 1.0)
+                );
             },
             Event::Render(renderer) => {
                 let canvas = renderer.canvas();
+                let canvases: &[&dyn RenderSurface] = &[&canvas];
                 let mut ctx = renderer.draw_ctx();
 
                 {
-                    let mut render_pass = ctx.render_pass(&[&canvas], renderer.depth_texture());
+                    let mut render_pass = ctx.render_pass(canvases, renderer.depth_texture());
 
-                    render_pass.draw(&renderer, DrawDescriptor {
-                        drawable: Some(triangle),
-                        instance_data: Some(transform), 
+                    render_pass.draw(renderer, DrawDescriptor {
+                        drawable: Some(&triangle),
+                        instance_data: Some(&transform), 
                         pipeline: &pipeline,
-                        shader_resources: &[&shader_resource],
+                        shader_resources: &[],
                     });
                 }
 
-                ctx.apply(canvas, &renderer);
+                ctx.apply(canvas, renderer);
             },
-            Event::DrawUi(ctx) => {
-                ctx.label(0, 0, format!("Current size: {}x{}", current_size.width, current_size.height));
+            Event::DrawUi(_ctx) => {
+                // ctx.label(0, 0, format!("Current size: {}x{}", current_size.width, current_size.height));
             },
         }
     });

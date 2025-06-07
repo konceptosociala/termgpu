@@ -95,6 +95,31 @@ impl<T: Pod> Buffer<T> {
         self.capacity = capacity;
     }
 
+    pub async fn read_bytes(&self, renderer: &Renderer) -> Vec<u8> {
+        let buffer_slice = self.inner.slice(..);
+
+        let (tx, rx) = futures_intrusive::channel::shared::oneshot_channel();
+        buffer_slice.map_async(wgpu::MapMode::Read, move |result| {
+            tx.send(result).unwrap();
+        });
+        renderer.device.poll(wgpu::Maintain::Wait);
+        rx.receive().await.unwrap().unwrap();
+
+        let data = buffer_slice.get_mapped_range();
+
+        data.to_vec()
+    }
+
+    pub async fn read(&self, renderer: &Renderer) -> Vec<T> {
+        let bytes = self.read_bytes(renderer).await;
+
+        bytemuck::cast_slice(&bytes).to_vec()
+    }
+
+    pub fn unmap(&self) {
+        self.inner.unmap();
+    }
+
     fn new_inner(device: &wgpu::Device, capacity: usize, usage: wgpu::BufferUsages) -> wgpu::Buffer {
         device.create_buffer(&wgpu::BufferDescriptor {
             label: Some(format!("Buffer ({:?}, {})", usage, pretty_type_name::<T>()).as_str()),
