@@ -34,6 +34,7 @@ pub mod prelude {
         resource::*,
         texture::*,
         shader::*,
+        Padding,
     };
     pub use super::error::RenderError;
 }

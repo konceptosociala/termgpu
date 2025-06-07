@@ -4,7 +4,8 @@ use std::{
 };
 
 use crate::{event::input::KeyboardInput, fatal, utils::Size};
-use crossterm::event as ctevent;
+use crossterm::{cursor::MoveTo, event as ctevent, style::{Color, Stylize}, terminal::{Clear, ClearType}, ExecutableCommand};
+use image::{ImageBuffer, Rgba};
 
 pub mod prelude {
     pub use super::Terminal;
@@ -53,8 +54,41 @@ impl Terminal {
         Size::Terminal(self.cols, self.rows)
     }
 
-    pub fn print_image(&self, _buf: &[u8]) {
-        // TODO: print_image
+    pub fn clear(&mut self) {
+        self.stdout
+            .execute(Clear(ClearType::All)).unwrap_or_else(|e| fatal!("Failed to clear terminal: {e}"))
+            .execute(MoveTo(0, 0)).unwrap_or_else(|e| fatal!("Failed to move cursor: {e}"));
+    }
+
+    pub fn print_image(&mut self, buf: &[u8], width: u32, height: u32) {
+        let image = ImageBuffer::<Rgba<u8>, _>::from_raw(width, height, buf).unwrap();
+        let mut s = String::new();
+        
+        for y in 0..(image.height() / 2) {
+            for x in 0..image.width() {
+                let top = image.get_pixel(x, y * 2);
+                let top_color = Color::Rgb {
+                    r: top.0[0],
+                    g: top.0[1],
+                    b: top.0[2],
+                };
+
+                let bottom = image.get_pixel(x, y * 2 + 1);
+                let bottom_color = Color::Rgb {
+                    r: bottom.0[0],
+                    g: bottom.0[1],
+                    b: bottom.0[2],
+                };
+
+                s.push_str(&"▀".with(top_color).on(bottom_color).to_string());
+            }
+        }
+
+        self.stdout
+            .execute(Clear(ClearType::All)).unwrap_or_else(|e| fatal!("Failed to clear terminal: {e}"))
+            .execute(MoveTo(0, 0)).unwrap_or_else(|e| fatal!("Failed to move cursor: {e}"));
+
+        print!("{s}");
     }
 
     pub fn print_at(&mut self, text: &str, x: u16, y: u16) {

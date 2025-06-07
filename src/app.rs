@@ -23,11 +23,11 @@ pub struct TermApp {
     renderer: Renderer,
     terminal: Terminal,
     intermediate_buffer: Buffer<u8>,
-    _timeout: Duration,
+    timeout: Duration,
 }
 
 impl TermApp {
-    pub fn new(_timeout: Duration) -> TermApp {
+    pub fn new(timeout: Duration) -> TermApp {
         let (cols, rows) = crossterm::terminal::size()
             .unwrap_or_else(|e| fatal!("Failed to get terminal size: {e}"));
 
@@ -50,7 +50,7 @@ impl TermApp {
             renderer,
             intermediate_buffer,
             terminal: Terminal::new(cols, rows),
-            _timeout,
+            timeout,
         }
     }
 
@@ -99,8 +99,17 @@ impl TermApp {
                 // 2. Check resize
                 if let Some(size) = update_game.game.terminal.resized() {
                     let size = size.to_renderer();
+                    let Size::Renderer(width, height) = size else { unreachable!() };
+
+                    let unpadded_bytes_per_row = width * 4;
+                    let align = wgpu::COPY_BYTES_PER_ROW_ALIGNMENT; // 256
+                    let padded_bytes_per_row = unpadded_bytes_per_row.div_ceil(align) * align;
 
                     update_game.game.renderer.resize_with(size);
+                    update_game.game.intermediate_buffer.resize(
+                        &update_game.game.renderer,
+                        (padded_bytes_per_row as usize) * (height as usize),
+                    );
                     handler.borrow_mut()(Event::Resize(size));
                 }
 
@@ -113,7 +122,8 @@ impl TermApp {
                 // 4. Render
                 handler.borrow_mut()(Event::Render(renderer));
 
-                // 4.5. Draw rendered texture to terminal
+                // 4.1. Draw rendered texture to terminal
+                // 4.1.1. Copy texture to intermediate buffer
                 let mut draw_ctx = renderer.draw_ctx();
                 let canvas = renderer.canvas();
                 let width = canvas.texture().descriptor().width;
@@ -126,15 +136,14 @@ impl TermApp {
 
                 draw_ctx.apply(canvas, renderer);
 
-                let data = pollster::block_on(
-                    render_game.game.intermediate_buffer.read_bytes(renderer)
-                );
+                let data = pollster::block_on(render_game.game.intermediate_buffer.read_bytes(renderer));
                 render_game.game.intermediate_buffer.unmap();
 
-                // TODO: shit code
+                // 4.1.2. Save the texture to a vec of bytes
                 let unpadded_bytes_per_row = width * 4;
                 let align = wgpu::COPY_BYTES_PER_ROW_ALIGNMENT; // 256
                 let padded_bytes_per_row = unpadded_bytes_per_row.div_ceil(align) * align;
+
                 let mut raw_data = Vec::with_capacity((width * height * 4) as usize);
                 for row in 0..height {
                     let start = (row * padded_bytes_per_row) as usize;
@@ -142,15 +151,14 @@ impl TermApp {
                     raw_data.extend_from_slice(&data[start..end]);
                 }
 
-                use image::{ImageBuffer, Rgba};
-                let buffer =
-                    ImageBuffer::<Rgba<u8>, _>::from_raw(width, height, raw_data).unwrap();
-                buffer.save("image.png").unwrap();
-
-                render_game.exit();
+                // 4.1.3. Print the image to the terminal
+                render_game.game.terminal.clear();
+                render_game.game.terminal.print_image(&raw_data, width, height);
 
                 // 5. Draw UI
                 // TODO: Implement UI context
+
+                std::thread::sleep(render_game.game.timeout);
             },
         );
 

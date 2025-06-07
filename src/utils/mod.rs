@@ -1,5 +1,5 @@
 pub mod prelude {
-
+    pub use super::Size;
 }
 
 pub mod macros;
