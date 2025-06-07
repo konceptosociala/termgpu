@@ -5,7 +5,7 @@ pub mod voxel_mesh;
 
 pub mod prelude {
     pub use super::Color;
-    // pub use super::camera::*;
+    pub use super::camera::*;
     pub use super::mesh::*;
     pub use super::transform::*;
 }

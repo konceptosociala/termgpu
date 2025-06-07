@@ -16,7 +16,7 @@ pub mod prelude {
     pub use crate::primitives::prelude::*;
     pub use crate::terminal::prelude::*;
     pub use crate::ui::prelude::*;
-    // pub use crate::utils::prelude::*;
+    pub use crate::utils::prelude::*;
     pub use nalgebra_glm as glm;
 
 }
