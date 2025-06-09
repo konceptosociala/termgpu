@@ -1,4 +1,4 @@
-# termgpu 📟❤️🖼️
+# termgpu 📟 ❤️ 🖼️
 
 A GPU-accelerated terminal graphics engine for Rust, enabling real-time rendering of 3D graphics directly in your terminal. Built on top of [wgpu](https://github.com/gfx-rs/wgpu) and [crossterm](https://github.com/crossterm-rs/crossterm), termgpu brings modern rendering techniques to the command line.
 
