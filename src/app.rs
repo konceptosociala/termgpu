@@ -152,7 +152,6 @@ impl TermApp {
                 }
 
                 // 4.1.3. Print the image to the terminal
-                render_game.game.terminal.clear();
                 render_game.game.terminal.print_image(&raw_data, width, height);
 
                 // 5. Draw UI

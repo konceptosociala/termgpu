@@ -1,5 +1,5 @@
 use std::{
-    io::{Stdout, stdout},
+    io::{stdout, Stdout, Write},
     time::Duration,
 };
 
@@ -84,11 +84,10 @@ impl Terminal {
             }
         }
 
-        self.stdout
-            .execute(Clear(ClearType::All)).unwrap_or_else(|e| fatal!("Failed to clear terminal: {e}"))
-            .execute(MoveTo(0, 0)).unwrap_or_else(|e| fatal!("Failed to move cursor: {e}"));
+        self.stdout.execute(MoveTo(0, 0)).unwrap_or_else(|e| fatal!("Failed to move cursor: {e}"));
 
-        print!("{s}");
+        self.stdout.write_all(s.as_bytes()).unwrap_or_else(|e| fatal!("Failed to print image: {e}"));
+        self.stdout.flush().unwrap();
     }
 
     pub fn print_at(&mut self, text: &str, x: u16, y: u16) {

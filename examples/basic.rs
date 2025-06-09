@@ -2,7 +2,7 @@ use std::time::Duration;
 use termgpu::prelude::*;
 
 fn main() {
-    let mut app = TermApp::new(Duration::from_millis(20));
+    let mut app = TermApp::new(Duration::from_millis(33));
 
     let mut triangle = Triangle::default();
     triangle.update(app.renderer_mut());
@@ -40,7 +40,7 @@ fn main() {
             },
             Event::Update => {
                 transform.rotation *= glm::quat_angle_axis(
-                    0.05 * direction, 
+                    0.005 * direction, 
                     &glm::Vec3::z()
                 );
             },
